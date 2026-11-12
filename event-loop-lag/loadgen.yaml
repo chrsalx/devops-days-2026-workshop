@@ -1,0 +1,54 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: event-loop-lag-load
+  namespace: labs
+spec:
+  ttlSecondsAfterFinished: 600
+  backoffLimit: 0
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: load
+          image: grafana/k6:0.55.0
+          imagePullPolicy: IfNotPresent
+          command: ["k6"]
+          args: ["run", "-o", "experimental-prometheus-rw", "/scripts/config.js"]
+          env:
+            - name: TARGET_URL
+              value: http://event-loop-lag:8080/work?duration=100
+            - name: LAB_NAME
+              value: event-loop-lag
+            - name: RUN_ID
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.uid
+            - name: K6_PROMETHEUS_RW_SERVER_URL
+              value: http://monitoring-kube-prometheus-prometheus.monitoring.svc.cluster.local:9090/api/v1/write
+            - name: K6_PROMETHEUS_RW_STALE_MARKERS
+              value: "true"
+            - name: VUS
+              value: "12"
+            - name: DURATION
+              value: "3m"
+            - name: REQUEST_TIMEOUT
+              value: "15s"
+          volumeMounts:
+            - name: load-script
+              mountPath: /scripts
+              readOnly: true
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              cpu: 100m
+              memory: 128Mi
+      volumes:
+        - name: load-script
+          configMap:
+            name: k6-load-script
+            items:
+              - key: config.js
+                path: config.js

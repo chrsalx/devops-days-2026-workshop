@@ -1,0 +1,57 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: k6-load-script
+  namespace: labs
+data:
+  config.js: |
+    import http from 'k6/http';
+    import { Counter } from 'k6/metrics';
+
+    const targetURL = __ENV.TARGET_URL;
+    if (!targetURL) {
+      throw new Error('TARGET_URL must be set');
+    }
+
+    const lab = __ENV.LAB_NAME;
+    const runID = __ENV.RUN_ID;
+    if (!lab || !runID) {
+      throw new Error('LAB_NAME and RUN_ID must be set');
+    }
+
+    const vus = Number(__ENV.VUS || 12);
+    if (!Number.isInteger(vus) || vus < 1 || vus > 16) {
+      throw new Error('VUS must be an integer between 1 and 16');
+    }
+
+    const duration = __ENV.DURATION || '3m';
+    const requestTimeout = __ENV.REQUEST_TIMEOUT || '15s';
+
+    export const options = {
+      vus,
+      duration,
+      discardResponseBodies: true,
+      noConnectionReuse: true,
+      tags: { lab, run_id: runID },
+    };
+
+    const responses = new Counter('lab_responses');
+    const successfulResponses = new Counter('lab_successful_responses');
+    const overloadResponses = new Counter('lab_overload_responses');
+    const unexpectedResponses = new Counter('lab_unexpected_responses');
+
+    export default function () {
+      const response = http.get(targetURL, {
+        timeout: requestTimeout,
+        tags: { name: 'lab_work' },
+      });
+
+      responses.add(1);
+      if (response.status >= 200 && response.status < 300) {
+        successfulResponses.add(1);
+      } else if (response.status === 503) {
+        overloadResponses.add(1);
+      } else {
+        unexpectedResponses.add(1);
+      }
+    }
