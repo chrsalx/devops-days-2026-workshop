@@ -19,23 +19,23 @@ The applications, load jobs, pool/queue/descriptor sizes, CPU and memory limits,
 ## Initialize one lab
 
 ```sh
-./database-connections/setup.sh
+./database-connections/scripts/setup.sh
 ```
 
 Choose a lab and run only its setup script; students do not need to initialize all five. Each script creates or reuses an isolated kind cluster named `metrics-<lab-directory>` (for example, `metrics-database-connections`) and installs the pinned `kube-prometheus-stack` and KEDA Helm charts, KEDA CRDs, the k6 ConfigMap, the cAdvisor DaemonSet, and a Grafana dashboard ConfigMap into that cluster. Each lab's application, ScaledObject, k6 Job, and k6 ConfigMap use a dedicated namespace matching the lab directory (`database-connections`, `file-descriptors`, `request-queue`, `http-client-pool`, or `event-loop-lag`); monitoring and KEDA remain in `monitoring` and `keda`. The stack provisions Grafana with its Prometheus service as the default datasource. Setup is safe to rerun and does not deploy the lab application or load job. The resulting context is `kind-metrics-<lab-directory>`; scripts and documented `kubectl` commands explicitly target it. Run one lab at a time on a resource-constrained machine. Prometheus discovers pods annotated with `prometheus.io/scrape: "true"`; KEDA queries it at `http://monitoring-kube-prometheus-prometheus.monitoring.svc.cluster.local:9090`.
 
 cAdvisor is installed from the local Kustomize configuration at `monitoring/cadvisor`. It exposes container CPU and memory series at `/metrics`, which Prometheus scrapes through the same pod annotations. In Grafana Explore, try `container_memory_working_set_bytes{container_label_io_kubernetes_pod_namespace="database-connections"}` or `rate(container_cpu_usage_seconds_total{container_label_io_kubernetes_pod_namespace="database-connections"}[5m])` to compare lab containers (replace the namespace with the selected lab). The DaemonSet has bounded resources and read-only mounts for the node filesystem, cgroups, and containerd state/socket; those host mounts still expose sensitive node metadata, so this configuration is intended for disposable local workshop clusters, not production or multi-tenant clusters.
 
-If an existing lab cluster still has the previous standalone Helm releases named `prometheus` or `grafana`, setup stops and leaves them untouched. The simplest migration is to run that lab's `cleanup.sh` and then its `setup.sh`; to keep the cluster, manually uninstall each existing release in that lab's context before rerunning setup.
+If an existing lab cluster still has the previous standalone Helm releases named `prometheus` or `grafana`, setup stops and leaves them untouched. The simplest migration is to run that lab's `scripts/cleanup.sh` and then its `scripts/setup.sh`; to keep the cluster, manually uninstall each existing release in that lab's context before rerunning setup.
 
-When reusing a cluster from an earlier version of the workshop, workloads already in the old `labs` namespace are not moved or deleted by setup and may continue running. Review and remove those old lab resources yourself, or use that lab's `cleanup.sh` and `setup.sh` to recreate its isolated cluster.
+When reusing a cluster from an earlier version of the workshop, workloads already in the old `labs` namespace are not moved or deleted by setup and may continue running. Review and remove those old lab resources yourself, or use that lab's `scripts/cleanup.sh` and `scripts/setup.sh` to recreate its isolated cluster.
 
 ## Compare metrics in Grafana
 
 Forward Grafana's local-only service to port 3000, replacing the example context with the selected lab's context:
 
 ```sh
-kubectl --context kind-metrics-database-connections port-forward -n monitoring svc/monitoring-grafana 3000:80
+./database-connections/scripts/grafana-port-forward.sh
 ```
 
 Open <http://localhost:3000> and sign in as `admin`. Retrieve the chart-generated password in another terminal with:
@@ -52,7 +52,7 @@ After deploying the selected application and starting its k6 Job, open **Dashboa
 
 ## Build and load the selected lab
 
-Follow the selected lab's README for its image build/load commands and expected observations. The Go labs use Gin metrics middleware, and the database lab also uses GORM's Prometheus plugin; the Node.js lab uses Fastify's metrics plugin. These integrations expose runtime, request, and framework metrics alongside the workload telemetry. Each lab cluster gets its own copy of the pinned official `grafana/k6` workload ConfigMap from setup; no custom load-generator image is needed. To change the script, edit the `config.js` value in `tools/k6/configmap.yaml` and apply it with that lab's context and namespace, for example: `kubectl --context kind-metrics-database-connections apply -n database-connections -f tools/k6/configmap.yaml`.
+From the repository root, run the selected lab's `scripts/build-images.sh` after setup to build its local image(s) with Docker Buildx and load them into that lab's kind cluster. This is separate from setup so students can rebuild without reinstalling cluster components. The HTTP client pool helper builds both its frontend and upstream images. The Go labs use Gin metrics middleware, and the database lab also uses GORM's Prometheus plugin; the Node.js lab uses Fastify's metrics plugin. These integrations expose runtime, request, and framework metrics alongside the workload telemetry. Each lab cluster gets its own copy of the pinned official `grafana/k6` workload ConfigMap from setup; no custom load-generator image is needed. To change the script, edit the `config.js` value in `tools/k6/configmap.yaml` and apply it with that lab's context and namespace, for example: `kubectl --context kind-metrics-database-connections apply -n database-connections -f tools/k6/configmap.yaml`.
 
 ## Observe scaling
 
@@ -70,7 +70,7 @@ Run the watch commands in separate terminals. In the example above, follow k6 ou
 When finished with the selected lab, its cleanup script deletes only that lab's entire isolated cluster, including its workloads and monitoring components:
 
 ```sh
-./database-connections/cleanup.sh
+./database-connections/scripts/cleanup.sh
 ```
 
-For a different lab, run that lab directory's `cleanup.sh`. These scripts do not touch the other lab clusters, the older `metrics-labs` cluster, the separate `metrics-lab` cluster, or any non-kind cluster.
+For a different lab, run that lab directory's `scripts/cleanup.sh`. These scripts do not touch the other lab clusters, the older `metrics-labs` cluster, the separate `metrics-lab` cluster, or any non-kind cluster.
