@@ -45,7 +45,7 @@
       },
       "targets": [
         {
-          "expr": "sum by (pod) (rate(process_cpu_seconds_total{namespace=\"labs\",pod=~\"${lab}-.*\"}[1m]))",
+          "expr": "sum by (pod) (rate(process_cpu_seconds_total{namespace=\"${lab}\",pod=~\"${lab}-.*\"}[1m]))",
           "legendFormat": "{{pod}}",
           "refId": "A"
         }
@@ -92,7 +92,7 @@
       },
       "targets": [
         {
-          "expr": "process_resident_memory_bytes{namespace=\"labs\",pod=~\"${lab}-.*\"}",
+          "expr": "process_resident_memory_bytes{namespace=\"${lab}\",pod=~\"${lab}-.*\"}",
           "legendFormat": "{{pod}}",
           "refId": "A"
         }

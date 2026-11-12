@@ -20,11 +20,14 @@ kubectl() {
   if [[ "$*" == *"get statefulset prometheus-monitoring-kube-prometheus-prometheus"* ]]; then
     printf 'statefulset.apps/prometheus-monitoring-kube-prometheus-prometheus\n'
   fi
+  if [[ "$*" == *"get secret -n monitoring monitoring-grafana"* ]]; then
+    printf '%s' "${MOCK_GRAFANA_PASSWORD_B64-c2VjdXJlLXRlc3QtcGFzc3dvcmQ=}"
+  fi
 }
 
 helm() {
   printf 'helm %s\n' "$*" >&2
-  if [[ "$*" == "list --all --short --namespace monitoring --kube-context "* ]]; then
+  if [[ "$*" == "list --short --namespace monitoring --kube-context "* ]]; then
     printf '%s\n' "${MOCK_RELEASES:-}"
     return 0
   fi
@@ -64,10 +67,17 @@ for lab in "${LABS[@]}"; do
   cleanup="${ROOT_DIR}/${lab}/cleanup.sh"
 
   output="$(MOCK_CLUSTERS="${all_clusters}" "${setup}" 2>&1)"
+  assert_contains "${output}" "✨ Setting up the ${lab} workshop lab ✨"
+  assert_contains "${output}" "🔎 Checking required tools (kind, kubectl, and Helm)..."
+  assert_contains "${output}" "📈 Installing Prometheus and Grafana with kube-prometheus-stack..."
+  assert_contains "${output}" "⚖️ Installing KEDA and its autoscaling components..."
+  assert_contains "${output}" "📊 Installing cAdvisor and the Grafana workshop dashboard..."
+  assert_contains "${output}" "✅ Cluster ${cluster} is ready"
   assert_contains "${output}" "kubectl --context ${context} cluster-info"
   assert_contains "${output}" "kubectl --context ${context} create namespace monitoring --dry-run=client -o yaml"
-  assert_contains "${output}" "helm list --all --short --namespace monitoring --kube-context ${context}"
-  assert_contains "${output}" "kubectl --context ${context} apply -f ${ROOT_DIR}/tools/k6/configmap.yaml"
+  assert_contains "${output}" "helm list --short --namespace monitoring --kube-context ${context}"
+  assert_contains "${output}" "kubectl --context ${context} create namespace ${lab} --dry-run=client -o yaml"
+  assert_contains "${output}" "kubectl --context ${context} apply --namespace ${lab} -f ${ROOT_DIR}/tools/k6/configmap.yaml"
   assert_contains "${output}" "helm repo update prometheus-community kedacore"
   assert_contains "${output}" "helm upgrade --install monitoring prometheus-community/kube-prometheus-stack --version 93.2.2 --namespace monitoring --create-namespace --values ${ROOT_DIR}/monitoring/kube-prometheus-stack-values.yaml --kube-context ${context} --wait --timeout 5m"
   assert_not_contains "${output}" "prometheus-community/prometheus"
@@ -83,6 +93,20 @@ for lab in "${LABS[@]}"; do
   assert_contains "${output}" "kubectl --context ${context} apply -k ${ROOT_DIR}/monitoring/cadvisor"
   assert_contains "${output}" "kubectl --context ${context} rollout status daemonset/cadvisor -n monitoring --timeout=180s"
   assert_contains "${output}" "kubectl --context ${context} apply -k ${ROOT_DIR}/monitoring/grafana"
+  assert_contains "${output}" "Lab resources and the k6 ConfigMap use namespace ${lab}. Existing workloads in namespace labs are not moved or removed."
+  assert_contains "${output}" "kubectl --context ${context} get secret -n monitoring monitoring-grafana -o jsonpath={.data.admin-password}"
+  assert_contains "${output}" "🔑 Grafana admin password: secure-test-password"
+  assert_contains "${output}" "💡 Retrieve it later with:"
+  assert_contains "${output}" "⚠️ The password will be printed below; avoid sharing or saving logs that contain it."
+  if [[ "${output}" != *$'\n🔑 Grafana admin password: secure-test-password' ]]; then
+    printf '%s: password was not the final setup output\n' "${lab}" >&2
+    exit 1
+  fi
+  if [[ "$(uname -s)" == "Darwin" ]]; then
+    assert_contains "${output}" "| base64 -D; echo"
+  else
+    assert_contains "${output}" "| base64 --decode; echo"
+  fi
   assert_not_contains "${output}" "kind create cluster"
   printf '%s: existing-cluster setup targets its own context\n' "${lab}"
 
@@ -160,6 +184,17 @@ metrics-labs" "${cleanup}" 2>&1)"
   printf '%s: setup propagates Grafana dashboard apply failures\n' "${lab}"
 
   set +e
+  MOCK_CLUSTERS="${cluster}" MOCK_KUBECTL_FAIL="apply --namespace ${lab} -f ${ROOT_DIR}/tools/k6/configmap.yaml" \
+    "${setup}" >/dev/null 2>&1
+  status=$?
+  set -e
+  if [[ "${status}" -ne 43 ]]; then
+    printf '%s: setup did not propagate k6 ConfigMap apply failure (status %s)\n' "${lab}" "${status}" >&2
+    exit 1
+  fi
+  printf '%s: setup propagates k6 ConfigMap apply failures\n' "${lab}"
+
+  set +e
   output="$(MOCK_CLUSTERS="${cluster}" MOCK_RELEASES=$'prometheus\ngrafana' "${setup}" 2>&1)"
   status=$?
   set -e
@@ -170,6 +205,40 @@ metrics-labs" "${cleanup}" 2>&1)"
   assert_contains "${output}" "Found legacy standalone Helm release(s): prometheus grafana. Setup will not remove them."
   assert_not_contains "${output}" "helm upgrade --install monitoring"
   printf '%s: setup protects legacy standalone releases\n' "${lab}"
+
+  set +e
+  output="$(MOCK_CLUSTERS="${cluster}" MOCK_KUBECTL_FAIL="get secret -n monitoring monitoring-grafana" \
+    "${setup}" 2>&1)"
+  status=$?
+  set -e
+  if [[ "${status}" -ne 1 ]]; then
+    printf '%s: setup did not report Grafana secret retrieval failure (status %s)\n' "${lab}" "${status}" >&2
+    exit 1
+  fi
+  assert_contains "${output}" "Could not retrieve the Grafana admin password"
+  printf '%s: setup reports Grafana secret retrieval failures\n' "${lab}"
+
+  set +e
+  output="$(MOCK_CLUSTERS="${cluster}" MOCK_GRAFANA_PASSWORD_B64="" "${setup}" 2>&1)"
+  status=$?
+  set -e
+  if [[ "${status}" -ne 1 ]]; then
+    printf '%s: setup accepted an empty Grafana secret (status %s)\n' "${lab}" "${status}" >&2
+    exit 1
+  fi
+  assert_contains "${output}" "The Grafana admin-password secret is empty"
+  printf '%s: setup rejects an empty Grafana secret\n' "${lab}"
+
+  set +e
+  output="$(MOCK_CLUSTERS="${cluster}" MOCK_GRAFANA_PASSWORD_B64="not-base64!" "${setup}" 2>&1)"
+  status=$?
+  set -e
+  if [[ "${status}" -ne 1 ]]; then
+    printf '%s: setup accepted malformed Grafana password data (status %s)\n' "${lab}" "${status}" >&2
+    exit 1
+  fi
+  assert_contains "${output}" "Could not decode the Grafana admin password"
+  printf '%s: setup rejects malformed Grafana password data\n' "${lab}"
 done
 
 printf 'All lab lifecycle checks passed.\n'

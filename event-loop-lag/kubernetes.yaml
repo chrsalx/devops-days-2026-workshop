@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: event-loop-lag
-  namespace: labs
+  namespace: event-loop-lag
 spec:
   replicas: 1
   selector:
@@ -56,7 +56,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: event-loop-lag
-  namespace: labs
+  namespace: event-loop-lag
 spec:
   selector:
     app: event-loop-lag
@@ -69,7 +69,7 @@ apiVersion: keda.sh/v1alpha1
 kind: ScaledObject
 metadata:
   name: event-loop-lag
-  namespace: labs
+  namespace: event-loop-lag
 spec:
   scaleTargetRef:
     name: event-loop-lag
@@ -87,5 +87,5 @@ spec:
       metricType: AverageValue
       metadata:
         serverAddress: http://monitoring-kube-prometheus-prometheus.monitoring.svc.cluster.local:9090
-        query: sum(nodejs_eventloop_lag_max_seconds{namespace="labs", pod=~"event-loop-lag-.*"})
+        query: sum(nodejs_eventloop_lag_max_seconds{namespace="event-loop-lag", pod=~"event-loop-lag-.*"})
         threshold: "0.05"

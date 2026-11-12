@@ -2,7 +2,7 @@ apiVersion: batch/v1
 kind: Job
 metadata:
   name: request-queue-load
-  namespace: labs
+  namespace: request-queue
 spec:
   ttlSecondsAfterFinished: 600
   backoffLimit: 0

@@ -2,7 +2,7 @@ apiVersion: batch/v1
 kind: Job
 metadata:
   name: event-loop-lag-load
-  namespace: labs
+  namespace: event-loop-lag
 spec:
   ttlSecondsAfterFinished: 600
   backoffLimit: 0

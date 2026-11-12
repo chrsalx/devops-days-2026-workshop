@@ -2,7 +2,7 @@ apiVersion: batch/v1
 kind: Job
 metadata:
   name: database-connections-load
-  namespace: labs
+  namespace: database-connections
 spec:
   ttlSecondsAfterFinished: 600
   backoffLimit: 0

@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: postgres
-  namespace: labs
+  namespace: database-connections
 spec:
   replicas: 1
   selector:
@@ -56,7 +56,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: postgres
-  namespace: labs
+  namespace: database-connections
 spec:
   selector:
     app: postgres
@@ -69,7 +69,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: database-connections
-  namespace: labs
+  namespace: database-connections
 spec:
   replicas: 1
   selector:
@@ -126,7 +126,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: database-connections
-  namespace: labs
+  namespace: database-connections
 spec:
   selector:
     app: database-connections
@@ -139,7 +139,7 @@ apiVersion: keda.sh/v1alpha1
 kind: ScaledObject
 metadata:
   name: database-connections
-  namespace: labs
+  namespace: database-connections
 spec:
   scaleTargetRef:
     name: database-connections
@@ -155,5 +155,5 @@ spec:
       metricType: AverageValue
       metadata:
         serverAddress: http://monitoring-kube-prometheus-prometheus.monitoring.svc.cluster.local:9090
-        query: sum(gorm_dbstats_in_use{db_name="workshop", namespace="labs", pod=~"database-connections-.*"})
+        query: sum(gorm_dbstats_in_use{db_name="workshop", namespace="database-connections", pod=~"database-connections-.*"})
         threshold: "2"

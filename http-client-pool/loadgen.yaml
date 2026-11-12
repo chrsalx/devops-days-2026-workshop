@@ -2,7 +2,7 @@ apiVersion: batch/v1
 kind: Job
 metadata:
   name: http-client-pool-load
-  namespace: labs
+  namespace: http-client-pool
 spec:
   ttlSecondsAfterFinished: 600
   backoffLimit: 0

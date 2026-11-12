@@ -2,7 +2,7 @@ apiVersion: batch/v1
 kind: Job
 metadata:
   name: file-descriptors-load
-  namespace: labs
+  namespace: file-descriptors
 spec:
   ttlSecondsAfterFinished: 600
   backoffLimit: 0

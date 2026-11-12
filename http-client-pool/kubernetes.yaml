@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: http-client-upstream
-  namespace: labs
+  namespace: http-client-pool
 spec:
   replicas: 1
   selector:
@@ -52,7 +52,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: upstream
-  namespace: labs
+  namespace: http-client-pool
 spec:
   selector:
     app: http-client-upstream
@@ -65,7 +65,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: http-client-pool
-  namespace: labs
+  namespace: http-client-pool
 spec:
   replicas: 1
   selector:
@@ -122,7 +122,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: http-client-pool
-  namespace: labs
+  namespace: http-client-pool
 spec:
   selector:
     app: http-client-pool
@@ -135,7 +135,7 @@ apiVersion: keda.sh/v1alpha1
 kind: ScaledObject
 metadata:
   name: http-client-pool
-  namespace: labs
+  namespace: http-client-pool
 spec:
   scaleTargetRef:
     name: http-client-pool
@@ -153,5 +153,5 @@ spec:
       metricType: AverageValue
       metadata:
         serverAddress: http://monitoring-kube-prometheus-prometheus.monitoring.svc.cluster.local:9090
-        query: sum(http_client_pool_waiters)
+        query: sum(http_client_pool_waiters{namespace="http-client-pool", pod=~"http-client-pool-.*"})
         threshold: "1"
