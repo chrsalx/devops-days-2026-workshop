@@ -3,12 +3,15 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
-LABS=(database-connections file-descriptors request-queue http-client-pool event-loop-lag)
+LABS=(database-connections file-descriptors event-loop-lag)
 
 kind() {
   printf 'kind %s\n' "$*" >&2
   if [[ "$*" == "get clusters" ]]; then
     printf '%s\n' "${MOCK_CLUSTERS:-}"
+  fi
+  if [[ -n "${MOCK_KIND_FAIL:-}" && "$*" == *"${MOCK_KIND_FAIL}"* ]]; then
+    return 45
   fi
 }
 
@@ -36,7 +39,17 @@ helm() {
   fi
 }
 
-export -f kind kubectl helm
+docker() {
+  printf 'docker %s\n' "$*" >&2
+  if [[ "$*" == "info --format {{.OSType}}/{{.Architecture}}" ]]; then
+    printf 'linux/amd64\n'
+  fi
+  if [[ -n "${MOCK_DOCKER_FAIL:-}" && "$*" == *"${MOCK_DOCKER_FAIL}"* ]]; then
+    return 44
+  fi
+}
+
+export -f kind kubectl helm docker
 
 assert_contains() {
   if [[ "$1" != *"$2"* ]]; then
@@ -56,15 +69,15 @@ all_clusters="metrics-lab
 metrics-labs
 metrics-database-connections
 metrics-file-descriptors
-metrics-request-queue
-metrics-http-client-pool
 metrics-event-loop-lag"
 
 for lab in "${LABS[@]}"; do
   cluster="metrics-${lab}"
   context="kind-${cluster}"
-  setup="${ROOT_DIR}/${lab}/setup.sh"
-  cleanup="${ROOT_DIR}/${lab}/cleanup.sh"
+  setup="${ROOT_DIR}/labs/${lab}/scripts/setup.sh"
+  cleanup="${ROOT_DIR}/labs/${lab}/scripts/cleanup.sh"
+  build_images="${ROOT_DIR}/labs/${lab}/scripts/build-images.sh"
+  grafana_forward="${ROOT_DIR}/labs/${lab}/scripts/grafana-port-forward.sh"
 
   output="$(MOCK_CLUSTERS="${all_clusters}" "${setup}" 2>&1)"
   assert_contains "${output}" "✨ Setting up the ${lab} workshop lab ✨"
@@ -94,6 +107,10 @@ for lab in "${LABS[@]}"; do
   assert_contains "${output}" "kubectl --context ${context} rollout status daemonset/cadvisor -n monitoring --timeout=180s"
   assert_contains "${output}" "kubectl --context ${context} apply -k ${ROOT_DIR}/monitoring/grafana"
   assert_contains "${output}" "Lab resources and the k6 ConfigMap use namespace ${lab}. Existing workloads in namespace labs are not moved or removed."
+  assert_contains "${output}" "🛠️ Run Docker Buildx to build and load the application image(s) before applying kubernetes.yaml:"
+  assert_contains "${output}" "${build_images}"
+  assert_contains "${output}" "📊 To open Grafana at http://localhost:3000, run ${grafana_forward} [local-port] in another terminal."
+  assert_contains "${output}" "The optional local port defaults to 3000; keep it running and press Ctrl-C to stop forwarding."
   assert_contains "${output}" "kubectl --context ${context} get secret -n monitoring monitoring-grafana -o jsonpath={.data.admin-password}"
   assert_contains "${output}" "🔑 Grafana admin password: secure-test-password"
   assert_contains "${output}" "💡 Retrieve it later with:"
@@ -127,6 +144,79 @@ metrics-labs" "${cleanup}" 2>&1)"
   assert_contains "${output}" "Cluster ${cluster} does not exist; nothing to clean up."
   assert_not_contains "${output}" "kind delete cluster"
   printf '%s: absent-cluster cleanup is a no-op\n' "${lab}"
+
+  output="$(MOCK_CLUSTERS="${cluster}" "${build_images}" 2>&1)"
+  assert_contains "${output}" "docker buildx build --platform linux/amd64 --load --file ${ROOT_DIR}/labs/${lab}/Dockerfile --tag workshop-${lab}:local ${ROOT_DIR}"
+  if [[ "${lab}" == "http-client-pool" ]]; then
+    assert_contains "${output}" "docker buildx build --platform linux/amd64 --load --file ${ROOT_DIR}/${lab}/Dockerfile.upstream --tag workshop-http-upstream:local ${ROOT_DIR}"
+    assert_contains "${output}" "kind load docker-image workshop-http-client-pool:local workshop-http-upstream:local --name ${cluster}"
+  else
+    assert_contains "${output}" "kind load docker-image workshop-${lab}:local --name ${cluster}"
+  fi
+  printf '%s: Buildx images load into the dedicated cluster\n' "${lab}"
+
+  set +e
+  output="$(MOCK_CLUSTERS="" "${build_images}" 2>&1)"
+  status=$?
+  set -e
+  if [[ "${status}" -ne 1 ]]; then
+    printf '%s: image helper accepted a missing cluster (status %s)\n' "${lab}" "${status}" >&2
+    exit 1
+  fi
+  assert_contains "${output}" "Kind cluster ${cluster} does not exist"
+  assert_not_contains "${output}" "docker buildx build"
+  printf '%s: image helper requires its cluster before building\n' "${lab}"
+
+  set +e
+  output="$(MOCK_CLUSTERS="${cluster}" MOCK_DOCKER_FAIL="buildx build" "${build_images}" 2>&1)"
+  status=$?
+  set -e
+  if [[ "${status}" -ne 44 ]]; then
+    printf '%s: image helper did not propagate Buildx failure (status %s)\n' "${lab}" "${status}" >&2
+    exit 1
+  fi
+  assert_not_contains "${output}" "kind load docker-image"
+  printf '%s: image helper stops on Buildx failure\n' "${lab}"
+
+  set +e
+  output="$(MOCK_CLUSTERS="${cluster}" MOCK_KIND_FAIL="load docker-image" "${build_images}" 2>&1)"
+  status=$?
+  set -e
+  if [[ "${status}" -ne 45 ]]; then
+    printf '%s: image helper did not propagate kind load failure (status %s)\n' "${lab}" "${status}" >&2
+    exit 1
+  fi
+  printf '%s: image helper propagates kind load failures\n' "${lab}"
+
+  output="$(MOCK_CLUSTERS="${cluster}" "${grafana_forward}" 2>&1)"
+  assert_contains "${output}" "kubectl --context ${context} port-forward -n monitoring svc/monitoring-grafana 3000:80"
+  output="$(MOCK_CLUSTERS="${cluster}" "${grafana_forward}" 3300 2>&1)"
+  assert_contains "${output}" "kubectl --context ${context} port-forward -n monitoring svc/monitoring-grafana 3300:80"
+  output="$(MOCK_CLUSTERS="${cluster}" "${grafana_forward}" 003300 2>&1)"
+  assert_contains "${output}" "kubectl --context ${context} port-forward -n monitoring svc/monitoring-grafana 3300:80"
+  printf '%s: Grafana forwarding uses the lab context and optional local port\n' "${lab}"
+
+  for invalid_port in 0 65536 abc 000000000000000000000000000000; do
+    set +e
+    output="$(MOCK_CLUSTERS="${cluster}" "${grafana_forward}" "${invalid_port}" 2>&1)"
+    status=$?
+    set -e
+    if [[ "${status}" -ne 2 ]]; then
+      printf '%s: Grafana forwarder accepted invalid port %s (status %s)\n' "${lab}" "${invalid_port}" "${status}" >&2
+      exit 1
+    fi
+  done
+  printf '%s: Grafana forwarder rejects invalid ports\n' "${lab}"
+
+  set +e
+  output="$(MOCK_CLUSTERS="${cluster}" MOCK_KUBECTL_FAIL="port-forward -n monitoring" "${grafana_forward}" 2>&1)"
+  status=$?
+  set -e
+  if [[ "${status}" -ne 43 ]]; then
+    printf '%s: Grafana forwarder did not propagate kubectl failure (status %s)\n' "${lab}" "${status}" >&2
+    exit 1
+  fi
+  printf '%s: Grafana forwarder propagates kubectl failures\n' "${lab}"
 
   set +e
   MOCK_CLUSTERS="${cluster}" MOCK_HELM_FAIL="prometheus-community/kube-prometheus-stack" \
