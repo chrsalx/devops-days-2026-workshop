@@ -190,7 +190,7 @@
       },
       "targets": [
         {
-          "expr": "max by (status) (k6_http_req_duration_p95{lab=\"${lab}\"})",
+          "expr": "max by (status) (k6_http_req_duration_p99{lab=\"${lab}\"})",
           "legendFormat": "p95 HTTP {{status}}",
           "refId": "A"
         }
