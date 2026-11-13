@@ -8,17 +8,17 @@ This lab is an independent Go module. From the repository root, run its tests an
 (cd labs/database-connections && go test ./... && go build ./...)
 ```
 
-Initialize this lab's isolated kind cluster and install `kube-prometheus-stack`, KEDA (including its CRDs), Metrics Server for the optional CPU comparison, and cAdvisor:
+Initialize this lab's cluster and install `kube-prometheus-stack`, KEDA (including its CRDs), Metrics Server for the optional CPU comparison, and cAdvisor:
 
 ```sh
 ./labs/database-connections/scripts/setup.sh
 ```
 
-The setup script is safe to rerun and does not install this lab's application. It creates or reuses `metrics-labs`, using the `kind-metrics-labs` context. The app, PostgreSQL, ScaledObject, k6 Job, and k6 ConfigMap use the dedicated `database-connections` namespace; monitoring and KEDA use their own namespaces. Setup also installs the shared cAdvisor DaemonSet from `monitoring/cadvisor` and waits for its rollout. Metrics Server is bounded to 100m CPU and 128Mi memory and uses `--kubelet-insecure-tls` for kind's self-signed kubelet certificates; keep this configuration to disposable local workshop clusters. Run `./labs/database-connections/scripts/cleanup.sh` when finished with this lab; it deletes only that cluster.
+The setup script is safe to rerun and does not install this lab's application. It creates or reuses the shared `metrics-labs` cluster, using the `kind-metrics-labs` context. The app, PostgreSQL, ScaledObject, k6 Job, and k6 ConfigMap use the dedicated `database-connections` namespace; monitoring and KEDA use their own namespaces. Setup also installs the shared cAdvisor DaemonSet from `monitoring/cadvisor` and waits for its rollout. Metrics Server is bounded to 100m CPU and 128Mi memory and uses `--kubelet-insecure-tls` for kind's self-signed kubelet certificates; keep this configuration to disposable local workshop clusters. Run `./labs/database-connections/scripts/cleanup.sh` when finished with this lab; it deletes only the `database-connections` namespace and leaves the shared cluster and monitoring stack running.
 
 Prometheus automatically scrapes cAdvisor's annotated pod at `/metrics` on port 8080, making container CPU and memory series available in Grafana Explore. The DaemonSet is bounded to 300m CPU and 256Mi memory and requires read-only access to node filesystem, cgroups, and containerd state/socket; keep it to these disposable kind clusters.
 
-If this cluster still has the old standalone Helm releases `prometheus` or `grafana`, setup stops without removing them. The simplest migration is to run `./labs/database-connections/scripts/cleanup.sh` and then setup again; to preserve the cluster, manually uninstall each existing release from context `kind-metrics-labs` before retrying.
+If this cluster still has the old standalone Helm releases `prometheus` or `grafana`, setup stops without removing them. Uninstall each existing release from context `kind-metrics-labs` before retrying, then rerun setup.
 
 Setup provisions **Workshop: application resources and k6 requests** in Grafana. After starting the app and load Job, run `./labs/database-connections/scripts/grafana-port-forward.sh` (or provide a local port, such as `./labs/database-connections/scripts/grafana-port-forward.sh 3001`) in a separate terminal; it forwards the service to `localhost:3000` by default and stays active until Ctrl-C. Open <http://localhost:3000> and sign in as `admin`. Retrieve the chart-generated password with:
 
@@ -26,11 +26,11 @@ Setup provisions **Workshop: application resources and k6 requests** in Grafana.
 kubectl --context kind-metrics-labs get secret -n monitoring monitoring-grafana -o jsonpath="{.data.admin-password}" | base64 --decode; echo
 ```
 
-This is the same command as `k get secret -n monitoring monitoring-grafana -o jsonpath="{.data.admin-password}" | base64 --decode; echo` when `k` is your `kubectl` alias. On macOS, use `base64 -D` instead of `base64 --decode`. Setup also prints the generated password at completion; avoid sharing or saving terminal logs that contain it. Select this lab in the dashboard. The database-specific panels compare pool occupancy, k6 p95 latency, process CPU against the 70% CPU-HPA target, and Prometheus-observed application pod count. CPU is an approximation based on process CPU divided by the container's 25m request; the pod count reflects scraped pods and may lag actual replicas. The request-rate panel sums concurrent runs and needs at least two samples. Grafana's local state is ephemeral and is removed when the lab cluster is cleaned up.
+On macOS, use `base64 -D` instead of `base64 --decode`. Setup also prints the generated password at completion; avoid sharing or saving terminal logs that contain it. Select this lab in the dashboard. The database-specific panels compare pool occupancy, k6 p95 latency, process CPU against the 70% CPU scaling target, and Prometheus-observed application pod count. CPU is an approximation based on process CPU divided by the container's 25m request; the pod count reflects scraped pods and may lag actual replicas. The request-rate panel sums concurrent runs and needs at least two samples. Grafana's local state is ephemeral and is removed when the lab namespace is cleaned up.
 
 To pick up the KEDA metrics and kube-state-metrics changes in an existing cluster, rerun `./labs/database-connections/scripts/setup.sh`; it is safe to rerun and upgrades the Helm releases in place. To update only the dashboard, run `kubectl --context kind-metrics-labs apply -k monitoring/grafana` from the repository root, then refresh Grafana.
 
-If upgrading a cluster that has workloads left in the legacy Kubernetes namespace `labs`, setup does not move or delete them; they may continue running. Review and remove the old resources yourself, or run this lab's `scripts/cleanup.sh` followed by `scripts/setup.sh` to recreate the cluster.
+If upgrading a cluster that has workloads left in the legacy Kubernetes namespace `labs`, setup does not move or delete them; they may continue running. Review them and delete that namespace yourself with `kubectl --context kind-metrics-labs delete namespace labs` once nothing there is still needed.
 
 From the repository root, build and load the images if you have not already:
 
@@ -55,7 +55,7 @@ The k6 script ConfigMap is installed in the `database-connections` namespace by 
 
 #### Compare fixed, CPU-based, and connection-based scaling
 
-`scaledobject.yaml` is the single KEDA `ScaledObject` for this lab. It has two triggers: the connection-based Prometheus trigger (`gorm_dbstats_in_use`, threshold 2 per pod) and a CPU trigger (70% utilization). KEDA scales to whichever trigger requires more replicas, between one and five. Compare one mode at a time and never run multiple k6 Jobs concurrently. To run with a fixed single replica, remove the `ScaledObject`, wait until its HPA disappears, and reset the deployment:
+`scaledobject.yaml` is the single KEDA `ScaledObject` for this lab. It has two triggers: a connection-based Prometheus trigger (percentage of pool connections in use across pods, threshold 70) and a CPU trigger (70% utilization). KEDA scales to whichever trigger requires more replicas, between one and five. Compare one mode at a time and never run multiple k6 Jobs concurrently. To run with a fixed single replica, remove the `ScaledObject`, wait until its HPA disappears, and reset the deployment:
 
 ```sh
 kubectl --context kind-metrics-labs delete job database-connections-load -n database-connections --ignore-not-found
