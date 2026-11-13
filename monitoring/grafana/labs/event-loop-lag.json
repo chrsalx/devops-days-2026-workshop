@@ -28,53 +28,6 @@
       "gridPos": {
         "h": 9,
         "w": 12,
-        "x": 0,
-        "y": 0
-      },
-      "id": 1,
-      "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      },
-      "targets": [
-        {
-          "expr": "100 * sum by (pod) (rate(process_cpu_seconds_total{namespace=\"${lab}\",pod=~\"${lab}-.*\"}[1m])) / on (pod) group_left max by (pod) (kube_pod_container_resource_limits{resource=\"cpu\",namespace=\"${lab}\",pod=~\"${lab}-.*\"})",
-          "legendFormat": "{{pod}}",
-          "refId": "A"
-        }
-      ],
-      "title": "Application CPU usage (% of container CPU limit)",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "drawStyle": "line",
-            "lineWidth": 2,
-            "showPoints": "never"
-          },
-          "unit": "percent"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 9,
-        "w": 12,
         "x": 12,
         "y": 0
       },
@@ -352,17 +305,17 @@
       },
       "targets": [
         {
-          "expr": "100 * sum by (pod) (rate(process_cpu_seconds_total{namespace=\"${lab}\",pod=~\"${lab}-.*\"}[1m])) / 0.025",
+          "expr": "sum by (pod) (process_resident_memory_bytes{namespace=\"${lab}\",pod=~\"${lab}-.*\"}) / 1048576",
           "legendFormat": "{{pod}}",
           "refId": "A"
         },
         {
-          "expr": "vector(70)",
-          "legendFormat": "CPU HPA target (70%)",
+          "expr": "vector(100)",
+          "legendFormat": "Memory scaling target (100 MiB per pod)",
           "refId": "B"
         }
       ],
-      "title": "Application CPU utilization vs CPU HPA target",
+      "title": "Resident memory (MiB) vs memory scaling target",
       "type": "timeseries"
     },
     {

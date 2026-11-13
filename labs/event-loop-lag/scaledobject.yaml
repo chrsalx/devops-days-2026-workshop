@@ -20,3 +20,9 @@ spec:
         serverAddress: http://monitoring-kube-prometheus-prometheus.monitoring.svc.cluster.local:9090
         query: sum(nodejs_eventloop_lag_max_seconds{namespace="event-loop-lag", pod=~"event-loop-lag-.*"})
         threshold: "0.05"
+    - type: prometheus
+      metricType: AverageValue
+      metadata:
+        serverAddress: http://monitoring-kube-prometheus-prometheus.monitoring.svc.cluster.local:9090
+        query: sum(process_resident_memory_bytes{namespace="event-loop-lag", pod=~"event-loop-lag-.*"}) / 1048576
+        threshold: "100"
