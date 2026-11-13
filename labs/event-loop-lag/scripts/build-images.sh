@@ -2,7 +2,7 @@
 set -euo pipefail
 
 LAB_NAME="event-loop-lag"
-CLUSTER_NAME="metrics-${LAB_NAME}"
+CLUSTER_NAME="metrics-labs"
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 LAB_DIR="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
 ROOT_DIR="$(cd -- "${SCRIPT_DIR}/../../.." && pwd)"

@@ -2,7 +2,7 @@
 set -euo pipefail
 
 LAB_NAME="event-loop-lag"
-CLUSTER_NAME="metrics-${LAB_NAME}"
+CLUSTER_NAME="metrics-labs"
 KIND_CONTEXT="kind-${CLUSTER_NAME}"
 MONITORING_CHART_VERSION="93.2.2"
 KEDA_CHART_VERSION="2.21.0"

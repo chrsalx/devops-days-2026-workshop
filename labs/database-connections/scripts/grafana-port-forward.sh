@@ -2,7 +2,7 @@
 set -euo pipefail
 
 LAB_NAME="database-connections"
-KIND_CONTEXT="kind-metrics-${LAB_NAME}"
+KIND_CONTEXT="kind-metrics-labs"
 LOCAL_PORT="${1:-3000}"
 
 if [[ "$#" -gt 1 || ! "${LOCAL_PORT}" =~ ^[0-9]+$ ]]; then

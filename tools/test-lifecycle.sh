@@ -66,13 +66,10 @@ assert_not_contains() {
 }
 
 all_clusters="metrics-lab
-metrics-labs
-metrics-database-connections
-metrics-file-descriptors
-metrics-event-loop-lag"
+metrics-labs"
 
 for lab in "${LABS[@]}"; do
-  cluster="metrics-${lab}"
+  cluster="metrics-labs"
   context="kind-${cluster}"
   setup="${ROOT_DIR}/labs/${lab}/scripts/setup.sh"
   cleanup="${ROOT_DIR}/labs/${lab}/scripts/cleanup.sh"
@@ -140,19 +137,16 @@ for lab in "${LABS[@]}"; do
   output="$(MOCK_CLUSTERS="" "${setup}" 2>&1)"
   assert_contains "${output}" "kind create cluster --name ${cluster} --wait 120s"
   assert_contains "${output}" "kubectl --context ${context} cluster-info"
-  assert_not_contains "${output}" "kind create cluster --name metrics-labs"
-  printf '%s: missing-cluster setup creates only its cluster\n' "${lab}"
+  printf '%s: missing-cluster setup creates the shared lab cluster\n' "${lab}"
 
   output="$(MOCK_CLUSTERS="${all_clusters}" "${cleanup}" 2>&1)"
-  assert_contains "${output}" "kind delete cluster --name ${cluster}"
-  assert_not_contains "${output}" "kind delete cluster --name metrics-labs"
-  assert_not_contains "${output}" "kind delete cluster --name metrics-lab"
-  printf '%s: cleanup deletes only its cluster\n' "${lab}"
-
-  output="$(MOCK_CLUSTERS="metrics-lab
-metrics-labs" "${cleanup}" 2>&1)"
-  assert_contains "${output}" "Cluster ${cluster} does not exist; nothing to clean up."
+  assert_contains "${output}" "kubectl --context ${context} delete namespace ${lab} --ignore-not-found --wait=true"
   assert_not_contains "${output}" "kind delete cluster"
+  printf '%s: cleanup removes only its namespace and keeps the shared cluster\n' "${lab}"
+
+  output="$(MOCK_CLUSTERS="metrics-lab" "${cleanup}" 2>&1)"
+  assert_contains "${output}" "Cluster ${cluster} does not exist; nothing to clean up."
+  assert_not_contains "${output}" "kubectl --context"
   printf '%s: absent-cluster cleanup is a no-op\n' "${lab}"
 
   output="$(MOCK_CLUSTERS="${cluster}" "${build_images}" 2>&1)"
