@@ -1,0 +1,20 @@
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: database-connections-cpu
+  namespace: database-connections
+spec:
+  scaleTargetRef:
+    name: database-connections
+  minReplicaCount: 1
+  maxReplicaCount: 5
+  advanced:
+    horizontalPodAutoscalerConfig:
+      behavior:
+        scaleDown:
+          stabilizationWindowSeconds: 60
+  triggers:
+    - type: cpu
+      metricType: Utilization
+      metadata:
+        value: "70"
