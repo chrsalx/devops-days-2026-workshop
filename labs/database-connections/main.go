@@ -86,10 +86,6 @@ func newRouter(pool *sql.DB) *gin.Engine {
 		c.String(http.StatusOK, "ok\n")
 	})
 	router.GET("/healthz", func(c *gin.Context) {
-		if err := pool.PingContext(c.Request.Context()); err != nil {
-			c.String(http.StatusServiceUnavailable, "database unavailable\n")
-			return
-		}
 		c.String(http.StatusOK, "ok\n")
 	})
 	router.GET("/work", func(c *gin.Context) {

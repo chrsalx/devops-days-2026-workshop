@@ -106,6 +106,16 @@ for lab in "${LABS[@]}"; do
   assert_contains "${output}" "kubectl --context ${context} apply -k ${ROOT_DIR}/monitoring/cadvisor"
   assert_contains "${output}" "kubectl --context ${context} rollout status daemonset/cadvisor -n monitoring --timeout=180s"
   assert_contains "${output}" "kubectl --context ${context} apply -k ${ROOT_DIR}/monitoring/grafana"
+  if [[ "${lab}" == "database-connections" ]]; then
+    assert_contains "${output}" "helm repo add metrics-server https://kubernetes-sigs.github.io/metrics-server/ --force-update"
+    assert_contains "${output}" "helm repo update prometheus-community kedacore metrics-server"
+    assert_contains "${output}" "📊 Installing Metrics Server for the optional CPU autoscaling comparison..."
+    assert_contains "${output}" "helm upgrade --install metrics-server metrics-server/metrics-server --version 3.13.0 --namespace kube-system --values ${ROOT_DIR}/monitoring/metrics-server-values.yaml --kube-context ${context} --wait --timeout 5m"
+    assert_contains "${output}" "kubectl --context ${context} rollout status deployment/metrics-server -n kube-system --timeout=180s"
+    assert_contains "${output}" "kubectl --context ${context} wait --for=condition=Available apiservice/v1beta1.metrics.k8s.io --timeout=180s"
+  else
+    assert_not_contains "${output}" "metrics-server/metrics-server"
+  fi
   assert_contains "${output}" "Lab resources and the k6 ConfigMap use namespace ${lab}. Existing workloads in namespace labs are not moved or removed."
   assert_contains "${output}" "🛠️ Run Docker Buildx to build and load the application image(s) before applying kubernetes.yaml:"
   assert_contains "${output}" "${build_images}"
@@ -239,6 +249,19 @@ metrics-labs" "${cleanup}" 2>&1)"
     exit 1
   fi
   printf '%s: setup propagates KEDA Helm failures\n' "${lab}"
+
+  if [[ "${lab}" == "database-connections" ]]; then
+    set +e
+    MOCK_CLUSTERS="${cluster}" MOCK_HELM_FAIL="metrics-server/metrics-server" \
+      "${setup}" >/dev/null 2>&1
+    status=$?
+    set -e
+    if [[ "${status}" -ne 42 ]]; then
+      printf '%s: setup did not propagate Metrics Server Helm failure (status %s)\n' "${lab}" "${status}" >&2
+      exit 1
+    fi
+    printf '%s: setup propagates Metrics Server Helm failures\n' "${lab}"
+  fi
 
   set +e
   MOCK_CLUSTERS="${cluster}" MOCK_KUBECTL_FAIL="apply -k ${ROOT_DIR}/monitoring/cadvisor" \

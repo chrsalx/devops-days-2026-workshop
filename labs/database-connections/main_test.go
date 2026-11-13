@@ -1,6 +1,10 @@
 package main
 
 import (
+	"context"
+	"database/sql"
+	"database/sql/driver"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -56,8 +60,36 @@ func gaugeValue(families []*dto.MetricFamily, name string) (float64, bool) {
 }
 
 func TestGinMetricsEndpoint(t *testing.T) {
-	router := newRouter(nil)
+	pool := sql.OpenDB(healthTestConnector{})
+	pool.SetMaxOpenConns(1)
+	defer pool.Close()
+
+	heldConnection, err := pool.Conn(context.Background())
+	if err != nil {
+		t.Fatalf("acquire the only database connection: %v", err)
+	}
+	defer heldConnection.Close()
+
+	router := newRouter(pool)
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
 	response := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/healthz", nil).WithContext(ctx)
+	router.ServeHTTP(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("GET /healthz with a saturated pool status = %d, want %d", response.Code, http.StatusOK)
+	}
+
+	if err := heldConnection.Close(); err != nil {
+		t.Fatalf("release the only database connection: %v", err)
+	}
+	response = httptest.NewRecorder()
+	router.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/work?duration=0s", nil))
+	if response.Code != http.StatusServiceUnavailable {
+		t.Fatalf("GET /work with an unavailable database status = %d, want %d", response.Code, http.StatusServiceUnavailable)
+	}
+
+	response = httptest.NewRecorder()
 	router.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/livez", nil))
 	if response.Code != http.StatusOK {
 		t.Fatalf("GET /livez status = %d, want %d", response.Code, http.StatusOK)
@@ -68,6 +100,44 @@ func TestGinMetricsEndpoint(t *testing.T) {
 	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), "go_goroutines") {
 		t.Fatalf("GET /metrics did not expose the Go collectors: status=%d body=%s", response.Code, response.Body.String())
 	}
+}
+
+type healthTestConnector struct{}
+
+func (healthTestConnector) Connect(context.Context) (driver.Conn, error) {
+	return healthTestConnection{}, nil
+}
+
+func (healthTestConnector) Driver() driver.Driver {
+	return healthTestDriver{}
+}
+
+type healthTestDriver struct{}
+
+func (healthTestDriver) Open(string) (driver.Conn, error) {
+	return healthTestConnection{}, nil
+}
+
+type healthTestConnection struct{}
+
+func (healthTestConnection) Prepare(string) (driver.Stmt, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (healthTestConnection) Close() error {
+	return nil
+}
+
+func (healthTestConnection) Begin() (driver.Tx, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (healthTestConnection) Ping(context.Context) error {
+	return nil
+}
+
+func (healthTestConnection) ExecContext(context.Context, string, []driver.NamedValue) (driver.Result, error) {
+	return nil, errors.New("database unavailable")
 }
 
 func TestRequestedDuration(t *testing.T) {

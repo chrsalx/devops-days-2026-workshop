@@ -14,7 +14,7 @@ spec:
           image: grafana/k6:v2
           imagePullPolicy: IfNotPresent
           command: ["k6"]
-          args: ["run", "-o", "experimental-prometheus-rw", "/scripts/config.js"]
+          args: ["run", "--include-system-env-vars", "-o", "experimental-prometheus-rw", "/scripts/config.js"]
           env:
             - name: TARGET_URL
               value: http://database-connections:8080/work?duration=2s
@@ -28,10 +28,12 @@ spec:
               value: http://monitoring-kube-prometheus-prometheus.monitoring.svc.cluster.local:9090/api/v1/write
             - name: K6_PROMETHEUS_RW_STALE_MARKERS
               value: "true"
+            - name: K6_PROMETHEUS_RW_TREND_STATS
+              value: "p(95)"
             - name: VUS
               value: "12"
-            - name: DURATION
-              value: "10m"
+            - name: STAGED_VUS
+              value: "true"
             - name: REQUEST_TIMEOUT
               value: "15s"
           volumeMounts:

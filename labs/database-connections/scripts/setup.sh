@@ -6,6 +6,7 @@ CLUSTER_NAME="metrics-${LAB_NAME}"
 KIND_CONTEXT="kind-${CLUSTER_NAME}"
 MONITORING_CHART_VERSION="93.2.2"
 KEDA_CHART_VERSION="2.21.0"
+METRICS_SERVER_CHART_VERSION="3.13.0"
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 LAB_DIR="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
 ROOT_DIR="$(cd -- "${SCRIPT_DIR}/../../.." && pwd)"
@@ -64,7 +65,8 @@ kubectl --context "${KIND_CONTEXT}" apply --namespace "${LAB_NAME}" -f "${ROOT_D
 printf '\n📚 Updating Helm repositories...\n'
 helm repo add prometheus-community https://prometheus-community.github.io/helm-charts --force-update
 helm repo add kedacore https://kedacore.github.io/charts --force-update
-helm repo update prometheus-community kedacore
+helm repo add metrics-server https://kubernetes-sigs.github.io/metrics-server/ --force-update
+helm repo update prometheus-community kedacore metrics-server
 
 printf '\n📈 Installing Prometheus and Grafana with kube-prometheus-stack...\n'
 helm upgrade --install monitoring prometheus-community/kube-prometheus-stack \
@@ -79,6 +81,14 @@ helm upgrade --install keda kedacore/keda \
   --version "${KEDA_CHART_VERSION}" \
   --namespace keda --create-namespace \
   --values "${ROOT_DIR}/monitoring/keda-values.yaml" \
+  --kube-context "${KIND_CONTEXT}" \
+  --wait --timeout 5m
+
+printf '\n📊 Installing Metrics Server for the optional CPU autoscaling comparison...\n'
+helm upgrade --install metrics-server metrics-server/metrics-server \
+  --version "${METRICS_SERVER_CHART_VERSION}" \
+  --namespace kube-system \
+  --values "${ROOT_DIR}/monitoring/metrics-server-values.yaml" \
   --kube-context "${KIND_CONTEXT}" \
   --wait --timeout 5m
 
@@ -113,13 +123,15 @@ kubectl --context "${KIND_CONTEXT}" rollout status deployment/monitoring-grafana
 kubectl --context "${KIND_CONTEXT}" rollout status deployment/keda-operator -n keda --timeout=180s
 kubectl --context "${KIND_CONTEXT}" rollout status deployment/keda-operator-metrics-apiserver -n keda --timeout=180s
 kubectl --context "${KIND_CONTEXT}" rollout status deployment/keda-admission-webhooks -n keda --timeout=180s
+kubectl --context "${KIND_CONTEXT}" rollout status deployment/metrics-server -n kube-system --timeout=180s
+kubectl --context "${KIND_CONTEXT}" wait --for=condition=Available apiservice/v1beta1.metrics.k8s.io --timeout=180s
 
 printf '\n📊 Installing cAdvisor and the Grafana workshop dashboard...\n'
 kubectl --context "${KIND_CONTEXT}" apply -k "${ROOT_DIR}/monitoring/cadvisor"
 kubectl --context "${KIND_CONTEXT}" rollout status daemonset/cadvisor -n monitoring --timeout=180s
 kubectl --context "${KIND_CONTEXT}" apply -k "${ROOT_DIR}/monitoring/grafana"
 
-printf '\n✅ Cluster %s is ready with Prometheus, Grafana, KEDA, cAdvisor, and the workshop dashboard.\n' "${CLUSTER_NAME}"
+printf '\n✅ Cluster %s is ready with Prometheus, Grafana, KEDA, Metrics Server, cAdvisor, and the workshop dashboard.\n' "${CLUSTER_NAME}"
 printf 'Lab resources and the k6 ConfigMap use namespace %s. Existing workloads in namespace labs are not moved or removed.\n' "${LAB_NAME}"
 printf '\n🛠️ Run Docker Buildx to build and load the application image(s) before applying kubernetes.yaml:\n'
 printf '   %s/scripts/build-images.sh\n' "${LAB_DIR}"

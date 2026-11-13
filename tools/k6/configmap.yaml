@@ -25,10 +25,27 @@ data:
 
     const duration = __ENV.DURATION || '3m';
     const requestTimeout = __ENV.REQUEST_TIMEOUT || '15s';
+    const stagedVUs = __ENV.STAGED_VUS === 'true';
+
+    const workload = stagedVUs
+      ? {
+          executor: 'ramping-vus',
+          startVUs: 1,
+          stages: [
+            { duration: '90s', target: 1 },
+            { duration: '10s', target: 3 },
+            { duration: '90s', target: 3 },
+            { duration: '10s', target: 6 },
+            { duration: '90s', target: 6 },
+            { duration: '10s', target: 12 },
+            { duration: '90s', target: 12 },
+          ],
+          gracefulRampDown: '10s',
+        }
+      : { executor: 'constant-vus', vus, duration };
 
     export const options = {
-      vus,
-      duration,
+      scenarios: { workload },
       discardResponseBodies: true,
       noConnectionReuse: true,
       tags: { lab, run_id: runID },

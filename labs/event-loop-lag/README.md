@@ -20,7 +20,9 @@ Setup provisions **Workshop: application resources and k6 requests** in Grafana.
 kubectl --context kind-metrics-event-loop-lag get secret -n monitoring monitoring-grafana -o jsonpath="{.data.admin-password}" | base64 --decode; echo
 ```
 
-This is the same command as `k get secret -n monitoring monitoring-grafana -o jsonpath="{.data.admin-password}" | base64 --decode; echo` when `k` is your `kubectl` alias. On macOS, use `base64 -D` instead of `base64 --decode`. Setup also prints the generated password at completion; avoid sharing or saving terminal logs that contain it. Select this lab and the current k6 run in the dashboard. It compares per-pod application-process CPU and resident memory with k6 HTTP requests per second by response status. Reload the dashboard if the new run is not listed yet; the request panel has no data before k6 samples arrive and goes empty after samples age out. Grafana's local state is ephemeral and is removed when the lab cluster is cleaned up.
+This is the same command as `k get secret -n monitoring monitoring-grafana -o jsonpath="{.data.admin-password}" | base64 --decode; echo` when `k` is your `kubectl` alias. On macOS, use `base64 -D` instead of `base64 --decode`. Setup also prints the generated password at completion; avoid sharing or saving terminal logs that contain it. Select this lab in the dashboard. It compares per-pod application-process CPU and resident memory with k6 HTTP requests per second by response status, summing concurrent runs. The request panel needs at least two k6 samples to calculate a rate. Grafana's local state is ephemeral and is removed when the lab cluster is cleaned up.
+
+To update the dashboard in an existing cluster, run `kubectl --context kind-metrics-event-loop-lag apply -k monitoring/grafana` from the repository root, then refresh Grafana.
 
 If upgrading a cluster that has workloads left in the legacy Kubernetes namespace `labs`, setup does not move or delete them; they may continue running. Review and remove the old resources yourself, or run this lab's `scripts/cleanup.sh` followed by `scripts/setup.sh` to recreate the cluster.
 

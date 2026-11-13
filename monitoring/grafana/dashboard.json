@@ -143,12 +143,226 @@
       },
       "targets": [
         {
-          "expr": "sum by (status) (rate(k6_http_reqs_total{lab=\"${lab}\",run_id=\"${run_id}\"}[1m]))",
+          "expr": "sum by (status) (rate(k6_http_reqs_total{lab=\"${lab}\"}[1m]))",
           "legendFormat": "HTTP {{status}}",
           "refId": "A"
         }
       ],
       "title": "k6 request rate by HTTP status",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "showPoints": "never"
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 0,
+        "y": 18
+      },
+      "id": 4,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "expr": "100 * gorm_dbstats_in_use{db_name=\"workshop\",namespace=\"database-connections\",pod=~\"database-connections-.*\"} / gorm_dbstats_max_open_connections{db_name=\"workshop\",namespace=\"database-connections\",pod=~\"database-connections-.*\"}",
+          "legendFormat": "{{pod}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Database connection pool occupancy",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "showPoints": "never"
+          },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 12,
+        "y": 18
+      },
+      "id": 5,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "expr": "max by (status) (k6_http_req_duration_p95{lab=\"database-connections\"})",
+          "legendFormat": "p95 HTTP {{status}}",
+          "refId": "A"
+        }
+      ],
+      "title": "k6 request latency p95",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 6,
+        "x": 0,
+        "y": 27
+      },
+      "id": 6,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "expr": "count(count by (pod) (up{namespace=\"database-connections\",pod=~\"database-connections-.*\"} == 1))",
+          "legendFormat": "scraped application pods",
+          "refId": "A"
+        }
+      ],
+      "title": "Observed application pods",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "showPoints": "never"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 70
+              }
+            ]
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 18,
+        "x": 6,
+        "y": 27
+      },
+      "id": 7,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "expr": "100 * sum by (pod) (rate(process_cpu_seconds_total{namespace=\"database-connections\",pod=~\"database-connections-.*\"}[1m])) / 0.025",
+          "legendFormat": "{{pod}}",
+          "refId": "A"
+        },
+        {
+          "expr": "vector(70)",
+          "legendFormat": "CPU HPA target (70%)",
+          "refId": "B"
+        }
+      ],
+      "title": "Application CPU utilization vs CPU HPA target",
       "type": "timeseries"
     }
   ],
@@ -199,29 +413,6 @@
         ],
         "query": "database-connections,file-descriptors,request-queue,http-client-pool,event-loop-lag",
         "type": "custom"
-      },
-      {
-        "current": {
-          "selected": false,
-          "text": "Select a run after starting k6",
-          "value": ""
-        },
-        "datasource": {
-          "type": "prometheus",
-          "uid": "prometheus"
-        },
-        "definition": "label_values(k6_http_reqs_total{lab=\"$lab\"}, run_id)",
-        "hide": 0,
-        "includeAll": false,
-        "label": "k6 run",
-        "name": "run_id",
-        "query": {
-          "query": "label_values(k6_http_reqs_total{lab=\"$lab\"}, run_id)",
-          "refId": "PrometheusVariableQueryEditor-VariableQuery"
-        },
-        "refresh": 1,
-        "sort": 1,
-        "type": "query"
       }
     ]
   },
