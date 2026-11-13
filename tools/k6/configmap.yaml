@@ -23,7 +23,7 @@ data:
       throw new Error('VUS must be an integer between 1 and 16');
     }
 
-    const duration = __ENV.DURATION || '3m';
+    const duration = __ENV.DURATION || '10m';
     const requestTimeout = __ENV.REQUEST_TIMEOUT || '15s';
     const stagedVUs = __ENV.STAGED_VUS === 'true';
 
@@ -32,13 +32,13 @@ data:
           executor: 'ramping-vus',
           startVUs: 1,
           stages: [
-            { duration: '90s', target: 1 },
-            { duration: '10s', target: 3 },
-            { duration: '90s', target: 3 },
-            { duration: '10s', target: 6 },
-            { duration: '90s', target: 6 },
-            { duration: '10s', target: 12 },
-            { duration: '90s', target: 12 },
+            { duration: '60s', target: 1 },
+            { duration: '5s', target: 3 },
+            { duration: '60s', target: 3 },
+            { duration: '5s', target: 6 },
+            { duration: '60s', target: 6 },
+            { duration: '5s', target: 12 },
+            { duration: '405s', target: 12 },
           ],
           gracefulRampDown: '10s',
         }

@@ -28,7 +28,7 @@ kubectl --context kind-metrics-database-connections get secret -n monitoring mon
 
 This is the same command as `k get secret -n monitoring monitoring-grafana -o jsonpath="{.data.admin-password}" | base64 --decode; echo` when `k` is your `kubectl` alias. On macOS, use `base64 -D` instead of `base64 --decode`. Setup also prints the generated password at completion; avoid sharing or saving terminal logs that contain it. Select this lab in the dashboard. The database-specific panels compare pool occupancy, k6 p95 latency, process CPU against the 70% CPU-HPA target, and Prometheus-observed application pod count. CPU is an approximation based on process CPU divided by the container's 25m request; the pod count reflects scraped pods and may lag actual replicas. The request-rate panel sums concurrent runs and needs at least two samples. Grafana's local state is ephemeral and is removed when the lab cluster is cleaned up.
 
-To update the dashboard in an existing cluster, run `kubectl --context kind-metrics-database-connections apply -k monitoring/grafana` from the repository root, then refresh Grafana.
+To pick up the KEDA metrics and kube-state-metrics changes in an existing cluster, rerun `./labs/database-connections/scripts/setup.sh`; it is safe to rerun and upgrades the Helm releases in place. To update only the dashboard, run `kubectl --context kind-metrics-database-connections apply -k monitoring/grafana` from the repository root, then refresh Grafana.
 
 If upgrading a cluster that has workloads left in the legacy Kubernetes namespace `labs`, setup does not move or delete them; they may continue running. Review and remove the old resources yourself, or run this lab's `scripts/cleanup.sh` followed by `scripts/setup.sh` to recreate the cluster.
 
@@ -44,7 +44,7 @@ kubectl --context kind-metrics-database-connections rollout status deployment/da
 
 The image helper uses Docker Buildx to build and load the image into this lab's kind cluster. If you rebuild an image after its Deployment is already running, restart that Deployment to make Kubernetes use the newly loaded `:local` image.
 
-Start the staged k6 workload. It holds at 1, 3, 6, and 12 virtual users for 90 seconds each, with 10-second transitions (about 6 minutes 30 seconds total):
+Start the staged k6 workload. It holds at 1, 3, 6, and 12 virtual users for 60, 60, 60, and 405 seconds, with 5-second ramps between levels, for a 10-minute run:
 
 ```sh
 kubectl --context kind-metrics-database-connections apply -f labs/database-connections/loadgen.yaml
@@ -55,7 +55,7 @@ The k6 script ConfigMap is installed in the `database-connections` namespace by 
 
 #### Compare fixed, CPU-based, and connection-based scaling
 
-The default `kubernetes.yaml` installs the connection-based KEDA `ScaledObject`. Compare one mode at a time and never run multiple k6 Jobs concurrently. To run with a fixed single replica, remove KEDA's scaler, wait until its HPA disappears, and reset the deployment:
+`scaledobject.yaml` is the single KEDA `ScaledObject` for this lab. It has two triggers: the connection-based Prometheus trigger (`gorm_dbstats_in_use`, threshold 2 per pod) and a CPU trigger (70% utilization). KEDA scales to whichever trigger requires more replicas, between one and five. Compare one mode at a time and never run multiple k6 Jobs concurrently. To run with a fixed single replica, remove the `ScaledObject`, wait until its HPA disappears, and reset the deployment:
 
 ```sh
 kubectl --context kind-metrics-database-connections delete job database-connections-load -n database-connections --ignore-not-found
@@ -65,21 +65,21 @@ kubectl --context kind-metrics-database-connections scale deployment/database-co
 kubectl --context kind-metrics-database-connections apply -f labs/database-connections/loadgen.yaml
 ```
 
-Stop the HPA watch with Ctrl-C after the KEDA-created HPA is gone. For the CPU comparison, first ensure the connection-based `ScaledObject` and its HPA are removed as above, then apply the optional CPU `ScaledObject` (KEDA `cpu` trigger at 70% utilization, one to five replicas). KEDA creates an HPA from it, and Metrics Server is installed in this lab's cluster by setup. Stop any previous Job and start a fresh run:
+Stop the HPA watch with Ctrl-C after the KEDA-created HPA is gone. For a connection-only or CPU-only comparison, first remove the `ScaledObject` as above, then apply a copy of `scaledobject.yaml` with only the trigger you want to test. Metrics Server is installed in this lab's cluster by setup. Stop any previous Job and start a fresh run:
 
 ```sh
 kubectl --context kind-metrics-database-connections delete job database-connections-load -n database-connections --ignore-not-found
 kubectl --context kind-metrics-database-connections scale deployment/database-connections -n database-connections --replicas=1
-kubectl --context kind-metrics-database-connections apply -f labs/database-connections/cpu-scaledobject.yaml
+kubectl --context kind-metrics-database-connections apply -f labs/database-connections/scaledobject.yaml
 kubectl --context kind-metrics-database-connections top pods -n database-connections
 kubectl --context kind-metrics-database-connections apply -f labs/database-connections/loadgen.yaml
 ```
 
-To return to connection-based scaling, delete the CPU `ScaledObject`, reset to one replica, and reapply the default manifests (the connection-based `ScaledObject` lives in `scaledobject.yaml`):
+To return to the default combined scaling, delete any trimmed copy, reset to one replica, and reapply the merged `ScaledObject`:
 
 ```sh
 kubectl --context kind-metrics-database-connections delete job database-connections-load -n database-connections --ignore-not-found
-kubectl --context kind-metrics-database-connections delete scaledobject database-connections-cpu -n database-connections --ignore-not-found
+kubectl --context kind-metrics-database-connections delete scaledobject database-connections -n database-connections --ignore-not-found
 kubectl --context kind-metrics-database-connections scale deployment/database-connections -n database-connections --replicas=1
 kubectl --context kind-metrics-database-connections apply -f labs/database-connections/kubernetes.yaml
 kubectl --context kind-metrics-database-connections apply -f labs/database-connections/scaledobject.yaml
@@ -90,4 +90,4 @@ Before each new mode, delete the prior k6 Job and wait for any old HPA to disapp
 
 Inspect the framework metrics directly with `kubectl --context kind-metrics-database-connections port-forward -n database-connections svc/database-connections 8080:8080`, then visit `http://localhost:8080/metrics`. The `ScaledObject` selects a pool-related series from the framework exposition and caps the application at five replicas. A manual request is `curl 'http://localhost:8080/work?duration=3s'`.
 
-Stop its load with `kubectl --context kind-metrics-database-connections delete job database-connections-load -n database-connections --ignore-not-found`. To repeat the job before TTL cleanup, delete it first, then apply its manifest again. Remove the lab services with `kubectl --context kind-metrics-database-connections delete -f labs/database-connections/kubernetes.yaml`.
+Stop its load with `kubectl --context kind-metrics-database-connections delete job database-connections-load -n database-connections --ignore-not-found`. To repeat the job before TTL cleanup, delete it first, then apply its manifest again. Remove the scaler and lab services with `kubectl --context kind-metrics-database-connections delete -f labs/database-connections/scaledobject.yaml --ignore-not-found` and `kubectl --context kind-metrics-database-connections delete -f labs/database-connections/kubernetes.yaml`.

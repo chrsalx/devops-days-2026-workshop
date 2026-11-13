@@ -1,6 +1,16 @@
 crds:
   install: true
 
+prometheus:
+  operator:
+    enabled: true
+    podMonitor:
+      enabled: true
+      additionalLabels:
+        release: monitoring
+  serviceMonitor:
+    enabled: true
+
 resources:
   operator:
     requests:

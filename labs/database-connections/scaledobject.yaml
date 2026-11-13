@@ -18,5 +18,9 @@ spec:
       metricType: AverageValue
       metadata:
         serverAddress: http://monitoring-kube-prometheus-prometheus.monitoring.svc.cluster.local:9090
-        query: sum(gorm_dbstats_in_use{db_name="workshop", namespace="database-connections", pod=~"database-connections-.*"})
-        threshold: "2"
+        query: 100 * sum(gorm_dbstats_in_use{db_name="workshop",namespace="database-connections",pod=~"database-connections-.*"}) / avg(gorm_dbstats_max_open_connections{db_name="workshop",namespace="database-connections",pod=~"database-connections-.*"})
+        threshold: "70"
+    - type: cpu
+      metricType: Utilization
+      metadata:
+        value: "70"

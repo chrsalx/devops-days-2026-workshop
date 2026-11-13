@@ -21,7 +21,7 @@
             "lineWidth": 2,
             "showPoints": "never"
           },
-          "unit": "cores"
+          "unit": "percent"
         },
         "overrides": []
       },
@@ -45,12 +45,12 @@
       },
       "targets": [
         {
-          "expr": "sum by (pod) (rate(process_cpu_seconds_total{namespace=\"${lab}\",pod=~\"${lab}-.*\"}[1m]))",
+          "expr": "100 * sum by (pod) (rate(process_cpu_seconds_total{namespace=\"${lab}\",pod=~\"${lab}-.*\"}[1m])) / on (pod) group_left max by (pod) (kube_pod_container_resource_limits{resource=\"cpu\",namespace=\"${lab}\",pod=~\"${lab}-.*\"})",
           "legendFormat": "{{pod}}",
           "refId": "A"
         }
       ],
-      "title": "Application CPU usage",
+      "title": "Application CPU usage (% of container CPU limit)",
       "type": "timeseries"
     },
     {
@@ -68,7 +68,7 @@
             "lineWidth": 2,
             "showPoints": "never"
           },
-          "unit": "bytes"
+          "unit": "percent"
         },
         "overrides": []
       },
@@ -92,12 +92,12 @@
       },
       "targets": [
         {
-          "expr": "process_resident_memory_bytes{namespace=\"${lab}\",pod=~\"${lab}-.*\"}",
+          "expr": "100 * max by (pod) (process_resident_memory_bytes{namespace=\"${lab}\",pod=~\"${lab}-.*\"}) / on (pod) group_left max by (pod) (kube_pod_container_resource_limits{resource=\"memory\",namespace=\"${lab}\",pod=~\"${lab}-.*\"})",
           "legendFormat": "{{pod}}",
           "refId": "A"
         }
       ],
-      "title": "Application resident memory",
+      "title": "Application resident memory (% of container memory limit)",
       "type": "timeseries"
     },
     {
@@ -363,6 +363,105 @@
         }
       ],
       "title": "Application CPU utilization vs CPU HPA target",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "showPoints": "never"
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 33
+      },
+      "id": 8,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "expr": "label_replace(label_replace(max by (scaler) (keda_scaler_metrics_value{exported_namespace=\"${lab}\", scaledObject=\"${lab}\"}), \"legend\", \"connections\", \"scaler\", \"prometheusScaler\"), \"legend\", \"cpu\", \"scaler\", \"cpu\")",
+          "legendFormat": "{{legend}}",
+          "refId": "A"
+        }
+      ],
+      "title": "KEDA trigger values and activity (which trigger drives scaling)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "showPoints": "never"
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 33
+      },
+      "id": 9,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "expr": "max by (horizontalpodautoscaler) (kube_horizontalpodautoscaler_status_desired_replicas{namespace=\"${lab}\", horizontalpodautoscaler=~\".*${lab}.*\"})",
+          "legendFormat": "desired replicas ({{horizontalpodautoscaler}})",
+          "refId": "A"
+        },
+        {
+          "expr": "count(count by (pod) (up{namespace=\"${lab}\", pod=~\"${lab}-.*\"} == 1))",
+          "legendFormat": "scraped pods",
+          "refId": "B"
+        }
+      ],
+      "title": "Replica count: desired (KEDA HPA) vs scraped pods",
       "type": "timeseries"
     }
   ],

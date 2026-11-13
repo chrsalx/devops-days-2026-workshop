@@ -30,8 +30,10 @@ spec:
               value: "true"
             - name: VUS
               value: "12"
+            - name: STAGED_VUS
+              value: "true"
             - name: DURATION
-              value: "3m"
+              value: "10m"
             - name: REQUEST_TIMEOUT
               value: "15s"
           volumeMounts:

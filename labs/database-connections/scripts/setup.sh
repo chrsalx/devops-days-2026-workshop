@@ -131,10 +131,13 @@ kubectl --context "${KIND_CONTEXT}" apply -k "${ROOT_DIR}/monitoring/cadvisor"
 kubectl --context "${KIND_CONTEXT}" rollout status daemonset/cadvisor -n monitoring --timeout=180s
 kubectl --context "${KIND_CONTEXT}" apply -k "${ROOT_DIR}/monitoring/grafana"
 
-printf '\n✅ Cluster %s is ready with Prometheus, Grafana, KEDA, Metrics Server, cAdvisor, and the workshop dashboard.\n' "${CLUSTER_NAME}"
+printf '\n✅ Cluster %s is ready with Prometheus, Grafana, KEDA (with its operator metrics PodMonitor), kube-state-metrics, Metrics Server, cAdvisor, and the workshop dashboard.\n' "${CLUSTER_NAME}"
 printf 'Lab resources and the k6 ConfigMap use namespace %s. Existing workloads in namespace labs are not moved or removed.\n' "${LAB_NAME}"
 printf '\n🛠️ Run Docker Buildx to build and load the application image(s) before applying kubernetes.yaml:\n'
 printf '   %s/scripts/build-images.sh\n' "${LAB_DIR}"
+printf '⚖️ Then apply the app, its ScaledObject, and the k6 Job (setup does not deploy them):\n'
+printf '   kubectl --context %s apply -f %s/kubernetes.yaml\n' "${KIND_CONTEXT}" "${LAB_DIR}"
+printf '   kubectl --context %s apply -f %s/scaledobject.yaml\n' "${KIND_CONTEXT}" "${LAB_DIR}"
 printf '📊 To open Grafana at http://localhost:3000, run %s/scripts/grafana-port-forward.sh [local-port] in another terminal.\n' "${LAB_DIR}"
 printf '   The optional local port defaults to 3000; keep it running and press Ctrl-C to stop forwarding.\n'
 

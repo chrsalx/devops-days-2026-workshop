@@ -4,7 +4,7 @@ metadata:
   name: database-connections-load
   namespace: database-connections
 spec:
-  ttlSecondsAfterFinished: 600
+  ttlSecondsAfterFinished: 10
   backoffLimit: 0
   template:
     spec:
@@ -36,6 +36,8 @@ spec:
               value: "true"
             - name: REQUEST_TIMEOUT
               value: "15s"
+            - name: DURATION
+              value: "10m"
           volumeMounts:
             - name: load-script
               mountPath: /scripts
