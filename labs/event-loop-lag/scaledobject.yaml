@@ -1,0 +1,22 @@
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: event-loop-lag
+  namespace: event-loop-lag
+spec:
+  scaleTargetRef:
+    name: event-loop-lag
+  minReplicaCount: 1
+  maxReplicaCount: 5
+  advanced:
+    horizontalPodAutoscalerConfig:
+      behavior:
+        scaleDown:
+          stabilizationWindowSeconds: 60
+  triggers:
+    - type: prometheus
+      metricType: AverageValue
+      metadata:
+        serverAddress: http://monitoring-kube-prometheus-prometheus.monitoring.svc.cluster.local:9090
+        query: sum(nodejs_eventloop_lag_max_seconds{namespace="event-loop-lag", pod=~"event-loop-lag-.*"})
+        threshold: "0.05"

@@ -190,7 +190,7 @@
       },
       "targets": [
         {
-          "expr": "100 * gorm_dbstats_in_use{db_name=\"workshop\",namespace=\"database-connections\",pod=~\"database-connections-.*\"} / gorm_dbstats_max_open_connections{db_name=\"workshop\",namespace=\"database-connections\",pod=~\"database-connections-.*\"}",
+          "expr": "100 * gorm_dbstats_in_use{db_name=\"workshop\",namespace=\"${lab}\",pod=~\"${lab}-.*\"} / gorm_dbstats_max_open_connections{db_name=\"workshop\",namespace=\"${lab}\",pod=~\"${lab}-.*\"}",
           "legendFormat": "{{pod}}",
           "refId": "A"
         }
@@ -237,7 +237,7 @@
       },
       "targets": [
         {
-          "expr": "max by (status) (k6_http_req_duration_p95{lab=\"database-connections\"})",
+          "expr": "max by (status) (k6_http_req_duration_p95{lab=\"${lab}\"})",
           "legendFormat": "p95 HTTP {{status}}",
           "refId": "A"
         }
@@ -292,7 +292,7 @@
       },
       "targets": [
         {
-          "expr": "count(count by (pod) (up{namespace=\"database-connections\",pod=~\"database-connections-.*\"} == 1))",
+          "expr": "count(count by (pod) (up{namespace=\"${lab}\",pod=~\"${lab}-.*\"} == 1))",
           "legendFormat": "scraped application pods",
           "refId": "A"
         }
@@ -352,7 +352,7 @@
       },
       "targets": [
         {
-          "expr": "100 * sum by (pod) (rate(process_cpu_seconds_total{namespace=\"database-connections\",pod=~\"database-connections-.*\"}[1m])) / 0.025",
+          "expr": "100 * sum by (pod) (rate(process_cpu_seconds_total{namespace=\"${lab}\",pod=~\"${lab}-.*\"}[1m])) / 0.025",
           "legendFormat": "{{pod}}",
           "refId": "A"
         },

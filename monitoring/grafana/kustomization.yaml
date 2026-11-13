@@ -9,3 +9,24 @@ configMapGenerator:
       disableNameSuffixHash: true
       labels:
         grafana_dashboard: "1"
+  - name: workshop-database-connections-dashboard
+    files:
+      - labs/database-connections.json
+    options:
+      disableNameSuffixHash: true
+      labels:
+        grafana_dashboard: "1"
+  - name: workshop-file-descriptors-dashboard
+    files:
+      - labs/file-descriptors.json
+    options:
+      disableNameSuffixHash: true
+      labels:
+        grafana_dashboard: "1"
+  - name: workshop-event-loop-lag-dashboard
+    files:
+      - labs/event-loop-lag.json
+    options:
+      disableNameSuffixHash: true
+      labels:
+        grafana_dashboard: "1"
